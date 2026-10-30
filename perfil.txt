@@ -1,0 +1,24 @@
+# ── Perfil del radar ─────────────────────────────────────────────────────────
+# Lo más fácil es llenarlo con Actions → "Configurar radar" → Run workflow.
+# También podés editarlo aquí con el lápiz ✏️. Listas separadas por coma.
+# Mayúsculas y tildes no importan.
+
+# Países o ciudades donde podés trabajar presencial o híbrido. Vacío = ninguno.
+# Ejemplos:  Venezuela, Caracas        Colombia, Bogotá, Medellín        Costa Rica
+# Poné siempre el país. Ojo con ciudades que existen en otros países (Valencia también
+# está en España; San José, en California): si te traen ruido, dejá solo el país.
+ubicaciones =
+
+# Vacantes remotas:
+#   latam  = las que dicen "Remote LATAM", "Latin America", "Americas"…
+#   global = lo anterior + "Worldwide", "Anywhere", "Global"
+#   no     = solo las ubicaciones de arriba
+# Ojo: "Remote" a secas casi siempre significa "remoto dentro de EE. UU.", por eso no cuenta.
+remoto = latam
+
+# El título debe tener ALGUNA de estas palabras. Vacío = cualquier título.
+# Con * al final = cualquier terminación (insight* → insight, insights).
+incluir = data, analyst, analytics, sql, bi, business intelligence, etl, database, reporting, insight*, quant*, risk, fraud, python, power bi, tableau, snowflake, databricks, machine learning, revenue operations, business systems, financial systems, governance, automation, rpa, pricing, research, fp&a
+
+# …y NO debe tener ninguna de estas.
+excluir = intern, internship, practicante, pasant*, student, estudiante, trainee, apprentice, graduate program, launch program, data center, data centre, data entry, annotat*, labeling, labelling, transcri*, customer support, customer service, customer care, support analyst, help desk, helpdesk, service desk, soc, payroll, accounts payable, accounts receivable, collections, director, vice president, vp, head of

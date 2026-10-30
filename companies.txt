@@ -1,0 +1,15 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Empresas que vigila el radar. Lo más fácil es agregarlas con
+# Actions → "Configurar radar" → Run workflow (escribís nombres o links y el radar
+# encuentra el portal). También podés agregarlas aquí, una por línea:
+#
+#   Nombre | URL                    el tipo de portal se detecta por el dominio
+#   Nombre | tipo | URL             tipos que hay que indicar: successfactors, radancy,
+#                                   phenom, jibe, icims, hiringroom
+#   Nombre | tipo | URL | local     "local" = si el portal no dice la ubicación, asumir la tuya
+#
+# Para silenciar una empresa sin borrarla, poné # al inicio de su línea.
+# Ejemplos (quitales el # para activarlos):
+# Gorilla Logic | https://jobs.lever.co/gorillalogic
+# Newsela | https://job-boards.greenhouse.io/newsela
+# ─────────────────────────────────────────────────────────────────────────────

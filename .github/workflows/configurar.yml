@@ -1,0 +1,69 @@
+name: Configurar radar
+
+on:
+  workflow_dispatch:
+    inputs:
+      empresas:
+        description: "Empresas a agregar: nombres o links de una vacante, separados por coma (ej: Gorilla Logic, BairesDev, https://...)"
+        type: string
+        required: false
+      ubicaciones:
+        description: "Países o ciudades para presencial/híbrido (ej: Venezuela, Caracas). Vacío = no cambiar · '-' = ninguna"
+        type: string
+        required: false
+      remoto:
+        description: "Vacantes remotas (latam = Remote LATAM / Latin America / Americas; global = además Worldwide)"
+        type: choice
+        options: ["sin cambio", "latam", "global", "no"]
+        default: "sin cambio"
+      palabras:
+        description: "Palabras que debe tener el título (ej: data, analyst, sql). Vacío = no cambiar"
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: job-radar               # no se cruza con una corrida del radar
+  cancel-in-progress: false
+
+jobs:
+  configurar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configurar
+        env:
+          EMPRESAS: ${{ inputs.empresas }}
+          UBICACIONES: ${{ inputs.ubicaciones }}
+          REMOTO: ${{ inputs.remoto == 'sin cambio' && '' || inputs.remoto }}
+          PALABRAS: ${{ inputs.palabras }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          pip install --quiet requests
+          python configurar.py
+
+      - name: Guardar cambios
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "job-radar-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add perfil.txt companies.txt
+          if git diff --cached --quiet; then echo "Sin cambios"; exit 0; fi
+          git commit --quiet -m "configurar radar"
+          for intento in 1 2 3; do
+            git pull --quiet --rebase origin "$BRANCH" && git push --quiet origin "HEAD:$BRANCH" && exit 0
+            sleep $((intento * 5))
+          done
+          exit 1

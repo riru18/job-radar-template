@@ -1,0 +1,115 @@
+name: Job Radar
+
+on:
+  schedule:
+    # Hora UTC: 13:43, 18:43 y 23:43 → Venezuela (UTC-4) 9:43, 14:43, 19:43 · Centroamérica (UTC-6) 7:43, 12:43, 17:43
+    - cron: "43 13,18,23 * * *"
+  workflow_dispatch: {}          # botón "Run workflow" para correrlo a mano
+  workflow_run:                  # y solo, apenas termina "Configurar radar"
+    workflows: ["Configurar radar"]
+    types: [completed]
+
+permissions:
+  contents: write                # para guardar radar.db (la memoria de vacantes vistas)
+
+concurrency:
+  group: job-radar               # nunca dos corridas a la vez: la segunda espera en fila
+  cancel-in-progress: false
+
+jobs:
+  radar:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Sin los Secrets de Telegram no hace nada (así la plantilla pública no corre sola)
+      - name: Verificar configuración
+        id: cfg
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TELEGRAM_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Faltan los Secrets TELEGRAM_TOKEN y TELEGRAM_CHAT_ID (ver README). El radar no se ejecutó."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ok == 'true'
+        with:
+          ref: ${{ github.ref_name }}   # la rama al EMPEZAR, con la memoria más reciente
+
+      - uses: actions/setup-python@v5
+        if: steps.cfg.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Correr radar
+        if: steps.cfg.outputs.ok == 'true'
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          pip install --quiet requests
+          python job_radar.py
+
+      - name: Guardar memoria (radar.db)
+        if: always() && steps.cfg.outputs.ok == 'true'
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          [ -f radar.db ] || { echo "No hay radar.db que guardar"; exit 0; }
+          git config user.name "job-radar-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp radar.db "$RUNNER_TEMP/local.db"
+
+          # radar.db es binario y git no sabe combinar dos versiones: tomamos la más
+          # reciente del repo y le sumamos nuestras filas con SQLite.
+          cat > "$RUNNER_TEMP/fusionar.py" <<'PY'
+          import os, shutil, sqlite3, sys
+          src, dst = sys.argv[1], sys.argv[2]
+          if not os.path.exists(dst):
+              shutil.copy(src, dst)
+              sys.exit(0)
+          db = sqlite3.connect(dst)
+          db.execute("ATTACH DATABASE ? AS src", (src,))
+          cols = lambda s: {r[1] for r in db.execute(f"PRAGMA {s}.table_info(seen)")}
+          if not cols("src"):
+              sys.exit(0)
+          if not cols("main"):
+              db.execute("CREATE TABLE main.seen AS SELECT * FROM src.seen WHERE 0")
+          for col, ddl in (("notified", "INTEGER NOT NULL DEFAULT 1"), ("salary", "TEXT")):
+              if col not in cols("main"):
+                  db.execute(f"ALTER TABLE main.seen ADD COLUMN {col} {ddl}")
+          n = "notified" if "notified" in cols("src") else "1"
+          s = "salary" if "salary" in cols("src") else "NULL"
+          db.execute("INSERT OR IGNORE INTO main.seen (key, ats, company, title, location, url, first_seen, notified, salary) "
+                     f"SELECT key, ats, company, title, location, url, first_seen, {n}, {s} FROM src.seen")
+          db.execute(f"UPDATE main.seen SET notified = 1 WHERE notified = 0 AND key IN (SELECT key FROM src.seen WHERE {n} = 1)")
+          db.commit()
+          print("filas en memoria:", db.execute("SELECT COUNT(*) FROM main.seen").fetchone()[0])
+          PY
+
+          for intento in 1 2 3 4 5; do
+            git fetch --quiet origin "$BRANCH"
+            git reset --quiet --hard "origin/$BRANCH"
+            python "$RUNNER_TEMP/fusionar.py" "$RUNNER_TEMP/local.db" radar.db
+            git add radar.db
+            if git diff --cached --quiet; then echo "Memoria sin cambios"; exit 0; fi
+            git commit --quiet -m "radar $(date -u +%Y-%m-%d_%H%M)"
+            if git push --quiet origin "HEAD:$BRANCH"; then echo "Memoria guardada"; exit 0; fi
+            echo "Otra escritura llegó primero; reintento $intento..."
+            sleep $((intento * 5))
+          done
+          exit 1
+
+      - name: Guardar CSV de la corrida
+        if: always() && steps.cfg.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vacantes-${{ github.run_number }}
+          path: salida/
+          retention-days: 5
+          if-no-files-found: ignore

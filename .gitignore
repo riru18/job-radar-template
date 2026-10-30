@@ -1,0 +1,6 @@
+# Datos locales: nunca se suben (el token de Telegram vive en GitHub Secrets)
+config.json
+radar.log
+salida/
+__pycache__/
+# radar.db NO va aquí: el workflow lo guarda en el repo como memoria de vacantes vistas
